@@ -1,60 +1,61 @@
-import express, { Application, Request, Response } from "express";
-import fs from "fs"
+import express from "express";
 import { config } from "dotenv";
-import path from "path";
-import csvParser from "csv-parser";
-
-
-
+import { buildSchema } from "graphql";
+import { bookData } from "./bookDataSet";
+import {graphqlHTTP} from "express-graphql"
 config();
 
-const app: Application = express();
+const app:express. Application = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.set("views", path.join(__dirname, "/views"));
-app.set("view engine", "ejs");
- 
-const path1 = path.join(__dirname, "/public/data.csv");
-// console.log("path1",path1)
+const bookSchema = buildSchema(`
+    type Query {
+        book(id: Int!): Book
+        books(topic: String): [Book]
+    },
+    type Book {
+        id: Int
+        title: String
+        author: String
+        category:String  
+    }
+`);
 
-interface IData{
-  
-    country :string;
-    country_code: string;
-    international_dialing:string
-  
+
+const getBookDetails = (args:any)=> { 
+  const id = args.id;
+  return bookData.filter(it => {
+      return it.id == id;
+  })[0];
+}
+const getBookList= (args:any)=> {
+  if (args.title) {
+      const title = args.title;
+      return bookData.filter(it => it.title === title);
+  } else {
+      return bookData;
+  }
 }
 
-const Countries:IData[]=[]
-fs.createReadStream(path1)
-  .pipe(csvParser())
-  .on("data", (data) => {
-    Countries.push(data);
-  })
-  .on("end", () => {
-    // console.log("",result);
-  });
+const root = {
+  book: getBookDetails,
+  books: getBookList
+};
 
- app.get("/",(req:Request,res:Response)=>{
-     res.status(200).json({Countries})
- }) 
+app.use('/',
+graphqlHTTP({
+  schema: bookSchema,
+  rootValue: root,
+  graphiql: true
+})
+);
 
- app.get("/details",(req:Request,res:Response)=>{
- const {name} =req.query
- console.log("name",name);
-  
-
-  res.status(200).json({county_details: Countries.find(it=>{
-      return it.country_code===name
-  })})
- }) 
-
-  
 try {
   app.listen(process.env.PORT, (): void => {
     console.log(`Connected successfully on port ${process.env.PORT}`);
   });
+
 } catch (error) {
   console.error(`Error occured: ${error}`);
 }
